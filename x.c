@@ -80,6 +80,13 @@ typedef struct {
 	GC gc;
 } DC;
 
+enum DisplayMode {
+	DSP_MODE_NORMAL,
+	DSP_MODE_BAR,
+	DSP_MODE_DOCK,
+	DSP_MODE_MODAL,
+};
+
 static inline ushort sixd_to_16bit(int);
 static int xmakeglyphfontspecs(XftGlyphFontSpec *, const Glyph *, int, int, int);
 static void xdrawglyphfontspecs(const XftGlyphFontSpec *, Glyph, int, int, int);
@@ -139,6 +146,7 @@ static void (*handler[LASTEvent])(XEvent *) = {
 static DC dc;
 static XWindow xw;
 static XSelection xsel;
+static enum DisplayMode display_mode = DSP_MODE_NORMAL;
 
 /* Font Ring Cache */
 enum {
@@ -867,6 +875,24 @@ xunloadfonts(void)
 	xunloadfont(&dc.ibfont);
 }
 
+static void // ripped from dmenu
+grabkeyboard(void)
+{
+	struct timespec ts = { .tv_sec = 0, .tv_nsec = 1000000  };
+	int i;
+
+	if (opt_embed)
+		return;
+	/* try to grab keyboard, we may have to wait for another process to ungrab */
+	for (i = 0; i < 1000; i++) {
+		if (XGrabKeyboard(xw.dpy, DefaultRootWindow(xw.dpy), True, GrabModeAsync,
+				GrabModeAsync, CurrentTime) == GrabSuccess)
+		return;
+		nanosleep(&ts, NULL);
+	}
+	die("cannot grab keyboard");
+}
+
 void
 xinit(void)
 {
@@ -911,10 +937,25 @@ xinit(void)
 
 	if (!(opt_embed && (parent = strtol(opt_embed, NULL, 0))))
 		parent = XRootWindow(xw.dpy, xw.scr);
+
+	if(display_mode == DSP_MODE_BAR || display_mode == DSP_MODE_MODAL){
+		XWindowAttributes wa;
+		if (!XGetWindowAttributes(xw.dpy, parent, &wa))
+			die("could not get embedding window attributes: 0x%lx", parent);
+		if(display_mode == DSP_MODE_BAR) win.w = wa.width;
+                else if(display_mode == DSP_MODE_MODAL){
+			xw.l = (wa.width - win.w) / 2;
+			xw.t = (wa.height - win.h) / 2;
+		}
+		xw.attrs.override_redirect = True;
+	}
+
 	xw.win = XCreateWindow(xw.dpy, parent, xw.l, xw.t,
 			win.w, win.h, 0, XDefaultDepth(xw.dpy, xw.scr), InputOutput,
 			xw.vis, CWBackPixel | CWBorderPixel | CWBitGravity
-			| CWEventMask | CWColormap, &xw.attrs);
+			| CWEventMask | CWColormap | 
+			(display_mode == DSP_MODE_BAR || display_mode ==  DSP_MODE_MODAL ?CWOverrideRedirect:0), 
+			&xw.attrs);
 
 	memset(&gcvalues, 0, sizeof(gcvalues));
 	gcvalues.graphics_exposures = False;
@@ -941,8 +982,8 @@ xinit(void)
 		}
 	}
 	xw.xic = XCreateIC(xw.xim, XNInputStyle, XIMPreeditNothing
-					   | XIMStatusNothing, XNClientWindow, xw.win,
-					   XNFocusWindow, xw.win, NULL);
+					| XIMStatusNothing, XNClientWindow, xw.win,
+					XNFocusWindow, xw.win, NULL);
 	if (xw.xic == NULL)
 		die("XCreateIC failed. Could not obtain input method.\n");
 
@@ -1706,6 +1747,7 @@ run(void)
 int
 main(int argc, char *argv[])
 {
+	char * mode;
 	xw.l = xw.t = 0;
 	xw.isfixed = False;
 	win.cursor = cursorshape;
@@ -1728,6 +1770,9 @@ main(int argc, char *argv[])
 		xw.gm = XParseGeometry(EARGF(usage()),
 				&xw.l, &xw.t, &cols, &rows);
 		break;
+	case 'h':
+	        rows = atoi(EARGF(usage()));
+	        break;
 	case 'i':
 		xw.isfixed = 1;
 		break;
@@ -1736,6 +1781,15 @@ main(int argc, char *argv[])
 		break;
 	case 'l':
 		opt_line = EARGF(usage());
+		break;
+	case 'm':
+		mode = EARGF(usage());
+		if(strcmp(mode, "bar") == 0)
+			display_mode = DSP_MODE_BAR;
+		else if(strcmp(mode, "dock") == 0)
+			display_mode = DSP_MODE_DOCK;
+		else if(strcmp(mode, "modal") == 0)
+			display_mode = DSP_MODE_MODAL;
 		break;
 	case 'n':
 		opt_name = EARGF(usage());
@@ -1765,6 +1819,7 @@ run:
 	XSetLocaleModifiers("");
 	tnew(MAX(cols, 1), MAX(rows, 1));
 	xinit();
+	if(display_mode == DSP_MODE_BAR || display_mode == DSP_MODE_MODAL) grabkeyboard();
 	selinit();
 	run();
 
