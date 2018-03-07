@@ -63,6 +63,8 @@ defines the
 .I font
 to use when st is run.
 .TP
+.BI \-m " mode"
+specify the display mode. Choices are bar, dock, or modal.
 .BI \-g " geometry"
 defines the X11 geometry string.
 The form is [=][<cols>{xX}<rows>][{+-}<xoffset>{+-}<yoffset>]. See
@@ -80,6 +82,12 @@ writes all the I/O to
 .I iofile.
 This feature is useful when recording st sessions. A value of "-" means
 standard output.
+.TP
+.BI \-h " height"
+determines the default height of the terminal in chars
+.TP
+.BI \-s " width"
+determines the default with of the terminal in chars
 .TP
 .BI \-T " title"
 defines the window title (default 'st').

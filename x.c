@@ -957,6 +957,12 @@ xinit(void)
 			(display_mode == DSP_MODE_BAR || display_mode ==  DSP_MODE_MODAL ?CWOverrideRedirect:0), 
 			&xw.attrs);
 
+	if(display_mode == DSP_MODE_DOCK){
+		Atom type = XInternAtom(xw.dpy, "_NET_WM_WINDOW_TYPE_DOCK", False);
+		XChangeProperty(xw.dpy, xw.win, XInternAtom(xw.dpy, "_NET_WM_WINDOW_TYPE", False),
+				XInternAtom(xw.dpy, "ATOM", False),  32, PropModeReplace, (unsigned char *)&type, 1);
+	}
+
 	memset(&gcvalues, 0, sizeof(gcvalues));
 	gcvalues.graphics_exposures = False;
 	dc.gc = XCreateGC(xw.dpy, parent, GCGraphicsExposures,
@@ -1794,6 +1800,9 @@ main(int argc, char *argv[])
 	case 'n':
 		opt_name = EARGF(usage());
 		break;
+	case 's':
+	        cols = atoi(EARGF(usage()));
+	        break;
 	case 't':
 	case 'T':
 		opt_title = EARGF(usage());
