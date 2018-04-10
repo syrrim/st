@@ -1,8 +1,10 @@
-/* See LICENSE for license details. */
+/* vim: noet sw=8 ts=8 sts=0 copyindent
+ * See LICENSE for license details. */
 #include <errno.h>
 #include <locale.h>
 #include <signal.h>
 #include <stdint.h>
+#include <sys/types.h>
 #include <sys/select.h>
 #include <time.h>
 #include <unistd.h>
@@ -1021,6 +1023,8 @@ xinit(void)
 			PropModeReplace, (uchar *)&thispid, 1);
 
 	resettitle();
+}
+void xmap(void){
 	XMapWindow(xw.dpy, xw.win);
 	xhints();
 	XSync(xw.dpy, False);
@@ -1750,6 +1754,16 @@ run(void)
 	}
 }
 
+
+void wait_sig(int sig){
+	sigset_t sigset;
+	sigemptyset(&sigset);
+	sigaddset(&sigset, sig);
+	sigprocmask(SIG_SETMASK, &sigset, NULL);
+	sigwait(&sigset, &sig);
+}
+
+
 int
 main(int argc, char *argv[])
 {
@@ -1757,6 +1771,7 @@ main(int argc, char *argv[])
 	xw.l = xw.t = 0;
 	xw.isfixed = False;
 	win.cursor = cursorshape;
+	char * daemon = NULL;
 
 	ARGBEGIN {
 	case 'a':
@@ -1784,6 +1799,9 @@ main(int argc, char *argv[])
 		break;
 	case 'o':
 		opt_io = EARGF(usage());
+		break;
+	case 'k':
+		daemon = EARGF(usage());
 		break;
 	case 'l':
 		opt_line = EARGF(usage());
@@ -1828,9 +1846,16 @@ run:
 	XSetLocaleModifiers("");
 	tnew(MAX(cols, 1), MAX(rows, 1));
 	xinit();
+	if(daemon){
+		FILE * pidfile = fopen(daemon, "w");
+		fprintf(pidfile, "%d\n", getpid());
+		fclose(pidfile);
+		wait_sig(SIGRTMIN);
+		unlink(daemon);
+	}
+	xmap();
 	if(display_mode == DSP_MODE_BAR || display_mode == DSP_MODE_MODAL) grabkeyboard();
 	selinit();
 	run();
-
 	return 0;
 }
